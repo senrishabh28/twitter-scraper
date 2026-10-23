@@ -3,6 +3,7 @@ import re
 import time
 import signal
 import tempfile
+import subprocess
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -432,6 +433,37 @@ def signal_handler(sig, frame):
 # CHROME DRIVER
 # ==============================================================================
 
+def _installed_chrome_major():
+    """
+    Return the major version of the Chrome/Chromium installed on this
+    machine (for example 155), or None when it cannot be detected.
+    Without this, undetected_chromedriver downloads the driver for the
+    newest Chrome release, which breaks whenever the installed browser
+    is one version behind (as on GitHub runners: driver 156 vs
+    browser 155, and Chrome then refuses to start).
+    """
+
+    for command in (
+        ["google-chrome", "--version"],
+        ["google-chrome-stable", "--version"],
+        ["chromium", "--version"],
+        ["chromium-browser", "--version"],
+    ):
+        try:
+            result = subprocess.run(
+                command, capture_output=True, text=True, timeout=10
+            )
+        except Exception:
+            continue
+
+        match = re.search(r"(\d+)\.", result.stdout or "")
+
+        if match:
+            return int(match.group(1))
+
+    return None
+
+
 def setup_driver():
 
     options = uc.ChromeOptions()
@@ -454,8 +486,19 @@ def setup_driver():
         "use_subprocess": True,
     }
 
-    if CHROME_VERSION_MAIN is not None:
-        kwargs["version_main"] = CHROME_VERSION_MAIN
+    version_main = CHROME_VERSION_MAIN
+
+    if version_main is None and IS_CI:
+        # On GitHub, force the driver to match the browser that is
+        # actually installed on the runner, not the newest release.
+        version_main = _installed_chrome_major()
+
+        if version_main is not None:
+            log(f"Detected Chrome {version_main} on this machine; "
+                "using the matching ChromeDriver.")
+
+    if version_main is not None:
+        kwargs["version_main"] = version_main
 
     return uc.Chrome(**kwargs)
 
