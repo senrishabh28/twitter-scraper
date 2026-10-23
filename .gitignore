@@ -1,0 +1,14 @@
+# Real credentials: the .env file stays on your computer only, NEVER on GitHub
+.env
+
+# Python cache
+__pycache__/
+.ipynb_checkpoints/
+
+# Local Chrome login profile (as sensitive as a password - never upload)
+Chrome_Profile/
+Temp/
+Debug/
+
+# Note: Excel_Output is intentionally NOT ignored - the GitHub workflow
+# saves the result files back into the repository after each run.
