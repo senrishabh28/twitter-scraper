@@ -1,7 +1,3 @@
-- name: Install latest Chrome
-  uses: browser-actions/setup-chrome@v1
-  with:
-    chrome-version: stable
 name: Run Twitter Scraper
 
 # Start the run by hand from the repo's Actions tab ("Run workflow").
