@@ -1,0 +1,78 @@
+name: Run Twitter Scraper
+
+# Start the run by hand from the repo's Actions tab ("Run workflow").
+# Three optional input boxes appear there: profile link(s), start date
+# and end date. Anything left blank uses the values written in the code.
+# The login always comes from THIS repository's Secrets
+# (TWITTER_USERNAME / TWITTER_PASSWORD): in the owner's repository that
+# is the owner's login; in a copy/fork, the copy's owner adds their own.
+# To run it on a schedule later, add lines like these under "on:" -
+# remember the time is UTC (IST is UTC + 5:30), so 9:00 AM IST = 03:30 UTC:
+#   schedule:
+#     - cron: "30 3 * * *"
+on:
+  workflow_dispatch:
+    inputs:
+      profiles:
+        description: "Profile link(s), comma separated - blank = use the link written in the code"
+        required: false
+        default: ""
+        type: string
+      start_date:
+        description: "Start date, e.g. 2026-10-15 - blank = use the date written in the code"
+        required: false
+        default: ""
+        type: string
+      end_date:
+        description: "End date, e.g. 2026-10-21 - blank = use the date written in the code"
+        required: false
+        default: ""
+        type: string
+
+# The workflow is allowed to save the output files back into the repo.
+# (Also set Settings > Actions > General > Workflow permissions to
+# "Read and write permissions".)
+permissions:
+  contents: write
+
+jobs:
+  scrape:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Get the code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install libraries
+        run: pip install -r requirements.txt
+
+      - name: Run the scraper
+        env:
+          TWITTER_USERNAME: ${{ secrets.TWITTER_USERNAME }}
+          TWITTER_PASSWORD: ${{ secrets.TWITTER_PASSWORD }}
+          SCRAPE_PROFILES: ${{ inputs.profiles }}
+          SCRAPE_START_DATE: ${{ inputs.start_date }}
+          SCRAPE_END_DATE: ${{ inputs.end_date }}
+        run: python twitter_scraper.py
+
+      - name: Keep debug screenshots if anything failed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-files
+          path: Debug/
+          if-no-files-found: ignore
+
+      - name: Save the output back into the repo
+        if: success()
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add Excel_Output
+          git diff --cached --quiet || git commit -m "Add scraper output"
+          git push
