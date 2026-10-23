@@ -605,6 +605,34 @@ def _click_button_with_text(driver, text, timeout=25):
     return False
 
 
+def _save_login_debug(driver, tag):
+    """
+    Save a photo and the HTML of the page the driver is currently on
+    into the Debug folder, so a failed login on GitHub can be checked
+    afterwards (the workflow uploads the Debug folder as an artifact).
+    Also logs the page title and address.
+    """
+
+    try:
+        stamp = datetime.now().strftime("%H%M%S")
+        photo = os.path.join(DEBUG_FOLDER, f"login_{tag}_{stamp}.png")
+        driver.save_screenshot(photo)
+        log(f"Saved a photo of the page for checking: {photo}")
+
+        page_file = os.path.join(DEBUG_FOLDER, f"login_{tag}_{stamp}.html")
+        with open(page_file, "w", encoding="utf-8") as handle:
+            handle.write(driver.page_source or "")
+        log(f"Saved the page details for checking: {page_file}")
+    except Exception:
+        pass
+
+    try:
+        log(f"Page title: {driver.title!r}")
+        log(f"Page address: {driver.current_url}")
+    except Exception:
+        pass
+
+
 def wait_for_login(driver):
     """
     Log in with ID/password only, so anyone can run this code with their
@@ -633,13 +661,24 @@ def wait_for_login(driver):
         return wait_for_manual_login(driver)
 
     try:
-        driver.get("https://x.com/i/flow/login")
-        time.sleep(2)
+        # STEP 1: Open the login page and find the login ID field
+        # (username / email / phone). On a cloud machine the page can
+        # load slowly or come up blank, so wait longer and load the
+        # page a second time before giving up.
+        id_input = None
 
-        # STEP 1: Fill the login ID field (username / email / phone).
-        id_input = _wait_visible(driver, By.CSS_SELECTOR, 'input[name="text"]')
+        for attempt in (1, 2):
+            driver.get("https://x.com/i/flow/login")
+            time.sleep(2)
+            id_input = _wait_visible(
+                driver, By.CSS_SELECTOR, 'input[name="text"]', timeout=45
+            )
+            if id_input is not None:
+                break
+            log("The login form did not appear; trying once more...")
 
         if id_input is None:
+            _save_login_debug(driver, "no_form")
             raise TimeoutException("The login ID field was not found.")
 
         id_input.click()
@@ -704,6 +743,7 @@ def wait_for_login(driver):
             time.sleep(2)
 
         log("Login was not confirmed automatically.")
+        _save_login_debug(driver, "not_confirmed")
         return wait_for_manual_login(driver)
 
     except (TimeoutException, WebDriverException) as exc:
